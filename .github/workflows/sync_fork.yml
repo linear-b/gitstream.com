@@ -11,6 +11,5 @@ jobs:
     steps:
       - uses: tgymnich/fork-sync@v2
         with:
-          owner: linear-b
           base: main
           head: main
