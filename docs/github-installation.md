@@ -50,9 +50,9 @@ You can set up gitStream for a single repo or your entire GitHub organization. S
         --8<-- "docs/downloads/gitstream.cm"
         ```
 
-        **Github Actions**
+        **GitHub Actions**
 
-        Once your gitStream configuration file is setup, you need a Github Actions configuration file to trigger gitStream automations. Create a `.github/workflows/gitstream.yml` file in your repository's default branch (usually `master` or `main`) and add the following configuration:
+        Once your gitStream configuration file is setup, you need a GitHub Actions configuration file to trigger gitStream automations. Create a `.github/workflows/gitstream.yml` file in your repository's default branch (usually `master` or `main`) and add the following configuration:
 
         ```yaml+jinja
         --8<-- "docs/downloads/gitstream.yml"
@@ -61,9 +61,6 @@ You can set up gitStream for a single repo or your entire GitHub organization. S
         <div class="result" markdown>
           <span>
           [:octicons-download-24: Download gitstream.yml (regular version)](/downloads/gitstream.yml){ .md-button }
-          </span>
-          <span>
-          [:octicons-download-24: Download gitstream.yml (lite version)](/downloads/gitstream-lite.yml){ .md-button }
           </span>
         </div>
 
@@ -84,6 +81,12 @@ You can set up gitStream for a single repo or your entire GitHub organization. S
 
             **Important:** The lite version has limitations - automations that rely on Git history (such as code-experts) may not work properly due to the shallow clone.
 
+        <div class="result" markdown>
+          <span>
+          [:octicons-download-24: Download gitstream.yml (lite version)](/downloads/gitstream-lite.yml){ .md-button }
+          </span>
+        </div>
+        
         !!! Success
             When finished, you should have the following file structure in your repo.
 
@@ -116,7 +119,7 @@ You can set up gitStream for a single repo or your entire GitHub organization. S
         ```
         **GitHub Actions**
 
-        Once your gitStream configuration file is set up, you will need to create a Github Actions configuration file to trigger gitStream automations. Create a `.github/workflows/gitstream.yml` file in your `cm` repository's default branch (usually `master` or `main`) and add the following configuration:
+        Once your gitStream configuration file is set up, you will need to create a GitHub Actions configuration file to trigger gitStream automations. Create a `.github/workflows/gitstream.yml` file in your `cm` repository's default branch (usually `master` or `main`) and add the following configuration:
 
         ```yaml+jinja
         --8<-- "docs/downloads/gitstream.yml"
@@ -125,9 +128,6 @@ You can set up gitStream for a single repo or your entire GitHub organization. S
         <div class="result" markdown>
           <span>
           [:octicons-download-24: Download gitstream.yml (regular version)](/downloads/gitstream.yml){ .md-button }
-          </span>
-          <span>
-          [:octicons-download-24: Download gitstream.yml (lite version)](/downloads/gitstream-lite.yml){ .md-button }
           </span>
         </div>
 
@@ -148,6 +148,12 @@ You can set up gitStream for a single repo or your entire GitHub organization. S
 
             **Important:** The lite version has limitations - automations that rely on Git history (such as code-experts) may not work properly due to the shallow clone. See the [troubleshooting section](/troubleshooting/#github-timeout-issues-with-large-repositories) for more details.
 
+        <div class="result" markdown>
+          <span>
+          [:octicons-download-24: Download gitstream.yml (lite version)](/downloads/gitstream-lite.yml){ .md-button }
+          </span>
+        </div>
+        
         !!! Success
             Once finished, **all** PRs to your organization's repositories will be processed by the GitHub Action in this repo, and your `cm` repo should have a file directory that looks like this.
 
@@ -181,7 +187,7 @@ You can set up gitStream for a single repo or your entire GitHub organization. S
 | User email | Used to identify users |
 
 ### Configure gitStream to Block Merges <a name="github-merge-block"></a>
-You can configure Github to require gitStream checks to pass before PRs can be merged using [branch protection rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/defining-the-mergeability-of-pull-requests/about-protected-branches).
+You can configure GitHub to require gitStream checks to pass before PRs can be merged using [branch protection rules](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/defining-the-mergeability-of-pull-requests/about-protected-branches).
 
 !!! info "Run a gitStream check before continuing"
     You need to run a check using your gitStream configuration at least once before it can be set as a required check. Make sure to open at least 1 PR before doing this setting.

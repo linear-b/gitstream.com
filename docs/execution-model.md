@@ -1,5 +1,12 @@
 # Trigger Control
 
+!!! warning "Platform Limitations"
+    **Explicit triggers** (using `on`, `triggers.on`, `triggers.include`, and `triggers.exclude` parameters) are only supported on GitHub :fontawesome-brands-github:. 
+    
+    Using explicit triggers in GitLab or Bitbucket will cause the automation to fail with an error. For GitLab and Bitbucket, simply omit trigger configuration to use implicit triggers automatically.
+
+    However, other execution control concepts covered in this document, such as action-level execution control, apply to all supported platforms (GitHub, GitLab, and Bitbucket).
+
 gitStream is triggered on new pull requests (PRs) for repositories that have gitStream installed. Upon triggering, gitStream collects context variables and evaluates the automation rules to determine which ones are relevant.
 
 ## Organization-level rules and repository rules
@@ -26,7 +33,7 @@ gitStream automations are triggered by events related to pull requests (PRs). Yo
 
 By default, gitStream evaluates any new commit pushed to the PR, triggering automation evaluation.
 
-Additionally, if any of the automation rules reference the following [`pr`](context-variables.md#pr) context variables: `pr.comments`, `pr.title`, `pr.description`, or `pr.labels`, gitStream shall trigger and will initiate automation rules evaluation where there are changes to the PR comments, title, description, or labels respectfully.
+Additionally, if any of the automation rules reference the following [`pr`](context-variables.md#pr) context variables: `pr.comments`, `pr.title`, `pr.description`, or `pr.labels`, gitStream shall trigger and will initiate automation rules evaluation where there are changes to the PR comments, title, description, or labels respectively.
 
 This allows for greater flexibility in the automation process, ensuring that the relevant automation rules are evaluated and triggered when necessary. The execution model ensures the automation process is streamlined, efficient, and effective.
 
@@ -36,14 +43,19 @@ gitstream supports an explicit triggering mechanism. When using explicit trigger
 
 Triggers can be defined globally at the file level or specifically for each automation. Triggers are applied only to the file(s) where they are declared.
 
+!!! important "When Implicit Triggers Are Disabled"
+    Implicit triggers are disabled ONLY when using `triggers.on` (file-level) or `on` (automation-level) - these parameters define explicit triggering events and completely override the default implicit trigger behavior.
+
+    When using ONLY `triggers.include` or `triggers.exclude` implicit triggers remain active - these parameters filter which branches/repositories run automations but do not change the triggering events themselves.
+
 !!! Note "Combining File-Level and Automation-Level Triggers"
     When both file-level explicit triggers and automation-level explicit triggers exist, the actual triggers used will be the result of unifying both lists. This means the automation will be triggered by any event specified in either the file-level triggers or the automation-level triggers.
 
 #### `triggers` section
 
-The `triggers` section in gitStream gives you precise control over when automations execute. It allows you to define conditions based on pull request events using `include` and `exclude` lists to specify branch and repository patterns. These lists determine which branches or repositories trigger or bypass automation but do not affect the events initiating automations.
+The `triggers` section in gitStream gives you precise control over when automations execute. It allows you to define conditions based on pull request events using `include` and `exclude` lists to specify branch, repository, and user patterns. These lists determine which branches, repositories, or users trigger or bypass automation but do not affect the events initiating automations - implicit triggers remain active when using only `include` and `exclude`.
 
-Additionally, the `on` keyword defines specific events that trigger automations. It can be added at the file level (under the `triggers` section) or within individual automations for greater customization. Multiple triggers can be stacked, meaning gitStream will execute the automation for each matching triggering event, allowing flexibility in defining automation behavior
+Additionally, the `on` keyword defines specific events that trigger automations. It can be added at the file level (under the `triggers` section) or within individual automations for greater customization. When `on` is used, it switches from implicit to explicit triggering mode, meaning only the specified events will trigger automations. Multiple triggers can be stacked, meaning gitStream will execute the automation for each matching triggering event, allowing flexibility in defining automation behavior
 
 <div class="trigger-details" markdown=1>
 | Key                                                   | Type              | Description                                                    |
@@ -53,44 +65,61 @@ Additionally, the `on` keyword defines specific events that trigger automations.
 | `triggers.exclude.branch` :fontawesome-brands-github: | [String or regex] | Branches that match will not trigger the automation.           |
 | `triggers.include.repository`                         | [String or regex] | Repositories that match will trigger the automation.           |
 | `triggers.exclude.repository`                         | [String or regex] | Repositories that match will not trigger the automation.       |
+| `triggers.include.user` :fontawesome-brands-github:   | [String or regex] | Users that match will trigger the automation.                 |
+| `triggers.exclude.user` :fontawesome-brands-github:   | [String or regex] | Users that match will not trigger the automation.             |
 </div>
+
+!!! note "Default Behavior"
+
+    - Implicit triggers are the default behavior if the automation doesn't have explicit triggers configured.
+    - The automation runs for all branches, repositories, and users if neither include nor exclude is specified.
+
+##### Trigger Events :fontawesome-brands-github:
 
 The table below lists supported explicit triggers, categorized into those enabled by default and those that require manual activation.
 
 <div class="trigger-details" markdown=1>
-| Triggering event                                                      | Explicit Trigger :fontawesome-brands-github: | Default (implicit triggers)    |
-| --------------------------------------------------------------------- | -------------------------------------------- | ------------------------------ |
-| Checks finished                                                       | -                                            | When an automation uses the `wait_for_all_checks` action |
-| Comment added                                                         | `comment_added`                              | when `pr.comment` in `.cm`     |
-| :fontawesome-brands-github: Comment edited                            | -                                            | when `pr.comment` in `.cm`     |
-| Commit pushed                                                         | `commit`                                     | `on`                           |
-| Creating a PR                                                         | `pr_created`                                 | `on`                           |
-| Description changed                                                   | -                                            | when `pr.description` in `.cm` |
-| Label added                                                           | `label_added`                                | when `pr.label` in `.cm`       |
-| Label removed                                                         | `label_removed`                              | when `pr.label` in `.cm`       |
-| :fontawesome-brands-github: Merging the PR                            | `merge`                                      | `off`                          |
-| Title change                                                          | -                                            | when `pr.title` in `.cm`       |
-| :fontawesome-brands-github: Transition from draft to ready for review | `pr_ready_for_review`                        | `off`                          |
-| :fontawesome-brands-github: Transition from any state to closed       | `pr_closed`                                  | `off`                          |
-| :fontawesome-brands-github: Transition from closed to open            | `pr_reopened`                                | `off`                          |
-| :fontawesome-brands-github: Transition from any state to approved     | `pr_approved`                                | If there is an automation with one of the actions: `require-reviewers`, `set-required-approvals` or `merge`, or uses `pr.approvals` context variable  |
+| Triggering event                                                      | Explicit Trigger :fontawesome-brands-github: | Default | Conditions    |
+| --------------------------------------------------------------------- | -------------------------------------------- | ------- | ------------- |
+| Checks finished                                                       | -                                            | `on`    | when an automation uses the `wait_for_all_checks` action |
+| Comment added                                                         | `comment_added`                              | `on`    | when `pr` context is used in `.cm` |
+| Comment edited :fontawesome-brands-github:                            | -                                            | `on`    | when `pr` context is used in `.cm` |
+| Commit pushed                                                         | `commit`                                     | `on`    |                                 |
+| Creating a PR                                                         | `pr_created`                                 | `on`    | when not a draft                |
+| Description changed                                                   | -                                            | `on`    | when `pr` context is used in `.cm` |
+| Label added                                                           | `label_added`                                | `on`    | when `pr` context is used in `.cm` |
+| Label removed                                                         | `label_removed`                              | `on`    | when `pr` context is used in `.cm` |
+| Merging the PR :fontawesome-brands-github:                            | `merge`                                      | `off`   |                                 |
+| Title changed                                                         | -                                            | `on`    | when `pr` context is used in `.cm` |
+| Transition from draft to ready for review                             | `pr_ready_for_review`                        | `on`    |                                 |
+| Transition from any state to closed :fontawesome-brands-github:       | `pr_closed`                                  | `off`   |                                 |
+| Transition from closed to open :fontawesome-brands-github:            | `pr_reopened`                                | `off`   |                                 |
+| Transition from any state to approved :fontawesome-brands-github:     | `pr_approved`                                | `on`    | when actions `require-reviewers`, `set-required-approvals`, or `merge` are used, or when `pr` context is used in `.cm` |
 </div>
 
-Explicit triggers are set independently per each automation block and can be configured at the file level, specific to each automation separately or in combination. If triggers are listed at the file level **and** specific automation, the automation will be triggered according to both triggers.
-If an automation block does not have explicit triggers configured, it will be triggered according to the default (implicit) triggers.
+Explicit triggers (using `on`) are set independently per each automation block and can be configured at the file level, specific to each automation separately or in combination. If triggers are listed at the file level and specific automation, the automation will be triggered according to both triggers.
+If an automation block does not have the `on` parameter configured (explicit triggers), it will be triggered according to the default (implicit) triggers, even if `triggers.include` or `triggers.exclude` are used at the file level.
 
 !!! Note
     The `on` parameter can be used within individual automation blocks, while `triggers.include` and `triggers.exclude` can only be defined at the file level.
 
+##### Branch Filtering :fontawesome-brands-github:
+
+Branch filtering allows you to control which branches can trigger automations based on branch name patterns.
+
 **Note on Matching:**
 
-- When using a `String` as the matching type, the values in `triggers.include.*` and `triggers.exclude.*` require exact matches. This means that the names of branches or repositories must exactly match the specified string to either trigger or prevent triggering the automation.
+- When using a `String` as the matching type, the values in `triggers.include.branch` and `triggers.exclude.branch` require exact matches. This means that the names of branches must exactly match the specified string to either trigger or prevent triggering the automation.
 - For more precise control, use a regular expression (regex) format: `r/REGEX_PATTERN/`.
 
-**Default Behavior:**
+##### Repository Filtering
 
-- Implicit triggers are the default behavior if the automation doesn't have explicit triggers configured.
-- The automation runs for all branches and repositories if neither include nor exclude is specified.
+Repository filtering allows you to control which repositories can trigger automations based on repository name patterns.
+
+**Note on Matching:**
+
+- When using a `String` as the matching type, the values in `triggers.include.repository` and `triggers.exclude.repository` require exact matches. This means that the names of repositories must exactly match the specified string to either trigger or prevent triggering the automation.
+- For more precise control, use a regular expression (regex) format: `r/REGEX_PATTERN/`.
 
 **Exclude/Include prioritization**
 
@@ -107,26 +136,134 @@ If an automation block does not have explicit triggers configured, it will be tr
           - my_feature
     ```
 
+##### User Filtering :fontawesome-brands-github:
+
+User filtering allows you to control which users can trigger automations, enabling you to exclude bot accounts or include only specific team members. This helps reduce noise from automated tools and optimize automation quota usage.
+
+**User Identification:**
+The user is matched against the event actor:
+
+- For commits: the commit author
+- For PR creation: the PR author  
+- For label changes: the user who added/removed the label
+- For comments: the commenter
+- For approvals: the approver
+
+**Common Use Cases:**
+
+- **Exclude bots:** Prevent automations from running when triggered by SonarQube, Dependabot, Renovate, or security scanners
+- **Include specific users:** Run automations only for specific team members or service accounts
+- **Reduce noise:** Filter out automated tool activity that doesn't require gitStream processing
+
+**Note on Matching:**
+
+- When using a `String` as the matching type, the values in `triggers.include.user` and `triggers.exclude.user` require exact matches. This means that the names of users must exactly match the specified string to either trigger or prevent triggering the automation.
+- For more precise control, use a regular expression (regex) format: `r/REGEX_PATTERN/`.
+
+## Action-Level Execution Control
+
+gitStream provides intelligent action-level execution control that automatically skips certain actions based on the original triggering event. This feature helps reduce noise and ensures that AI-powered and code-related actions only execute when there are actual code changes, improving efficiency across all supported providers (GitLab, Bitbucket, and GitHub).
+
+### How It Works
+
+When an automation is triggered, gitStream evaluates each action individually against the original triggering event. Some actions are automatically skipped if the triggering event is not relevant to their purpose.
+
+!!! important "Explicit Triggers Override"
+    When explicit triggers are configured (using the `on` or `triggers` parameters), they take precedence over the automatic skip mechanism. This means actions will execute for all explicitly defined triggers, regardless of the action-level execution rules below.
+
+### Action Execution Rules
+
+The following table shows which actions are restricted to code-related triggering events:
+
+<div class="trigger-details" markdown=1>
+| Action                | Executes Only On                                           | Behavior on Other Triggers |
+| --------------------- | ---------------------------------------------------------- | -------------------------- |
+| `add-code-comment`    | Commit pushed, Creating a PR (not draft), PR ready for review | Skipped |
+| `code-review`         | Commit pushed, Creating a PR (not draft), PR ready for review | Skipped |
+| `describe-changes`    | Commit pushed, Creating a PR (not draft), PR ready for review | Skipped |
+| `explain-code-experts`| Commit pushed, Creating a PR (not draft), PR ready for review | Skipped |
+| All other actions     | Current defaults (no restrictions)                        | Executed |
+</div>
+
 ### Examples
+
+#### Scenario: AI Code Review with Explicit Triggers
+
+```yaml+jinja
+automations:
+  ai_code_review:
+    on:
+      - commit
+      - label_added
+    if:
+      - true
+    run:
+      - action: code-review@v1        # Executes on both commit and label_added (explicit triggers override skip rules)
+      - action: add-label@v1          # Executes on both commit and label_added
+        args:
+          label: "reviewed"
+```
+
+In this example with explicit triggers:
+- When triggered by a `commit` event: both actions execute
+- When triggered by a `label_added` event: both actions execute (explicit triggers take precedence)
+
+#### Scenario: No Explicit Triggers
+
+```yaml+jinja
+automations:
+  smart_review:
+    if:
+      - {{ files | length > 5 }}
+    run:
+      - action: describe-changes@v1   # Only executes on code-related events
+      - action: add-reviewers@v1      # Executes on all default triggers
+        args:
+          reviewers: ["expert1", "expert2"]
+```
+
+With implicit triggers (no explicit triggers configured), `describe-changes` will only execute when the automation is triggered by code changes, while `add-reviewers` follows the current default behavior.
+
+## Examples
+
+
+#### Enable AI Actions on Draft PRs
+By default, AI actions like `code-review` don't run on draft PRs. To enable it, use explicit triggers with `pr_created` and `commit`:
+
+```yaml+jinja
+automations:
+    ai_review_on_drafts:
+    on:
+        - pr_created
+        - commit
+    if:
+        - true
+    run:
+        - action: code-review@v1
+```
+
+This allows developers to get AI feedback during the coding process before marking the PR as ready for review.
 
 #### Dependabot and Renovate
 
-For example, you can have your normal automations that help developers with their PRs and a separate automation that automates Dependabot or Renovate version bumps. Both automations serve distinctly different purposes: the first helps your developers streamline their PRs, while the other reduces developers' toil by auto-approving version bumps. You will not want to unnecessarily trigger gitStream for Dependabot or Renovate, so you can configure the triggers to exclude the branch where Dependabot or Renovate PRs are created.
+For example, you can have your normal automations that help developers with their PRs and a separate automation that automates Dependabot or Renovate version bumps. Both automations serve distinctly different purposes: the first helps your developers streamline their PRs, while the other reduces developers' toil by auto-approving version bumps. You will not want to unnecessarily trigger gitStream for Dependabot or Renovate, so you can configure the triggers to exclude these bot users.
 
-!!! warning "Required gitStream Plugins"
-    This example requires you to install the [`extractDependabotVersionBump`](/filter-function-plugins/#extractdependabotversionbump) and [`compareSemver`](/filter-function-plugins/#comparesemver) plugins.
 
-In your default automation file, you should exclude the branch where Dependabot or Renovate PRs are created:
+In your default automation file, you should exclude bot users like Dependabot or Renovate:
 
 ```yaml+jinja title="gitstream.cm"
 manifest:
   version: 1.0
 
 # Disable triggering when the PR is created by bots
+# Note: Only using triggers.exclude means implicit triggers remain active
+# (automations will still trigger on commits, PR creation, etc.)
 triggers:
   exclude:
-    branch:
-      - r/(Dependabot|dependabot|Renovate|renovate)/
+    user:
+      - dependabot[bot]
+      - renovate[bot] 
+      - r/(bot|dependabot|renovate)/
 
 # The default automations for developers below
 automations:
@@ -146,10 +283,13 @@ And the other automations file is set to automate Dependabot PRs:
 manifest:
   version: 1.0
 
+# Note: triggers.include still allows implicit triggers  
+# However, the automations below use 'on' which switches to explicit mode
 triggers:
   include:
-    branch:
-      - r/(Dependabot|dependabot|Renovate|renovate)/
+    user:
+      - dependabot[bot]
+      - renovate[bot]
 
 automations:
   bump_minor:
@@ -183,7 +323,7 @@ automations:
           comment: |
             Dependabot `patch` version bumps are approved and merged automatically.
 
-bump: {{ pr.description | extractDependabotVersionBump | compareSemver }}
+bump: {{ pr.description | checkDependabot | checkSemver }}
 ```
 
 #### Assign code expert
@@ -230,9 +370,60 @@ automations:
           gt: 10
 ```
 
+#### User Filtering Examples :fontawesome-brands-github:
+
+Exclude specific bot users from triggering automations while allowing all other users:
+
+```yaml+jinja title="exclude-bots.cm"
+manifest:
+  version: 1.0
+
+# Exclude bot users from triggering automations
+triggers:
+  exclude:
+    user:
+      - sonar
+      - dependabot[bot]
+      - renovate[bot]
+      - r/(bot|scanner)/
+
+automations:
+  review_requirements:
+    if:
+      - true
+    run:
+      - action: set-required-approvals@v1
+        args:
+          approvals: 2
+```
+
+Include only specific team members for sensitive automations:
+
+```yaml+jinja title="team-only.cm"
+manifest:
+  version: 1.0
+
+# Only allow specific team members to trigger these automations
+triggers:
+  include:
+    user:
+      - john-doe
+      - jane-smith
+      - r/team-lead-.*/
+
+automations:
+  security_review:
+    if:
+      - {{ files | match(regex=r/\.(env|key|pem)$/) | some }}
+    run:
+      - action: add-label@v1
+        args:
+          label: security-review-required
+```
+
 #### Branch regex pattern
 
-Trigger only specific automations branch pattern A, and trigger other automation for all other branches except those that fit the pattern REGEX_PATTERN
+Trigger only specific automations branch pattern A, and trigger other automation for all other branches except those that fit the pattern REGEX_PATTERN.
 
 ```yaml+jinja
 # Automation in this file will trigger only for branch pattern REGEX_PATTERN

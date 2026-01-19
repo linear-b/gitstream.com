@@ -4,7 +4,7 @@ description: Context Variables enable gitStream to extract useful data from PRs.
 ---
 # Context variables
 
-Context variable are the inputs for the automation conditions or checks.
+Context variables are the inputs for the automation conditions or checks.
 
 !!! Legend
 
@@ -22,6 +22,7 @@ Context variable are the inputs for the automation conditions or checks.
 
 gitStream includes a collection of variables called contexts.
 
+- [`actions`](#actions) :fontawesome-solid-flask: :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 - [`branch`](#branch) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 - [`env`](#env) :fontawesome-solid-flask: :fontawesome-brands-github:
 - [`files`](#files) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
@@ -90,6 +91,60 @@ The following structures are used in the context objects:
     ```
 
 ## Reference
+
+#### `actions` :fontawesome-solid-flask:
+
+The `actions` context contains outputs from actions that have been executed in previous automations within the same CM file. This enables creating conditional workflows based on the results of earlier actions.
+
+!!! info "First Action with Outputs"
+    
+    Currently, only the [`code-review`](/automation-actions/#code-review) action supports outputs. This feature will be expanded to other actions in future releases.
+
+| Values                       | Type                                      | Description                                                                                                                               |
+| ---------------------------- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `actions`                    | Map                                       | Contains outputs from all completed actions, organized by automation ID                                                                   |
+| `actions.<automation_id>`    | Map                                       | Outputs from a specific automation (identified by its key in the `automations` section)                                                   |
+| `actions.<automation_id>.outputs` | Map                                 | All outputs produced by the action(s) in the specified automation                                                                         |
+| `actions.<automation_id>.outputs.<output_name>` | Various           | Specific output value (type depends on the action - see individual action documentation)                                                  |
+
+**Syntax Notes:**
+
+- Use dot notation for automation names with underscores: `actions.ai_code_review.outputs.is_LGTM`
+- Use bracket notation for automation names with hyphens: `actions['ai-code-review'].outputs.is_LGTM`
+
+**Example Usage:**
+
+```yaml+jinja
+automations:
+  # First automation: Run AI code review
+  ai_code_review:
+    if:
+      - {{ not pr.draft }}
+    run:
+      - action: code-review@v1
+
+  # Second automation: Only runs if the AI review found no issues
+  auto_approve_on_clean_review:
+    if:
+      - {{ actions.ai_code_review.outputs.is_LGTM }}
+    run:
+      - action: approve@v1
+
+  # Third automation: Add different labels based on review result
+  label_based_on_review:
+    if:
+      - true
+    run:
+      - action: add-label@v1
+        args:
+          label: "{{ 'ai-approved' if actions.ai_code_review.outputs.is_LGTM else 'needs-review' }}"
+```
+
+**Available Action Outputs:**
+
+| Action | Output | Type | Description |
+|--------|--------|------|-------------|
+| `code-review@v1` | `is_LGTM` | Bool | `true` if no issues were found, `false` if issues were detected |
 
 #### `branch`
 
@@ -226,6 +281,7 @@ The `pr` context includes metadata related to the pull request.
 | `pr.author_teams`           | String                                      | The teams which the PR author is member of                                                 |
 | `pr.checks`                 | [[`Check`]](#check-structure)               | List of checks, names and status                                                           |
 | `pr.comments`               | [[`Comment`]](#comment-structure)           | List of PR comments objects                                                                |
+| `pr.commit_statuses` :fontawesome-brands-github:       | [[`CommitStatus`]](#commitstatus-structure) | List of commit status check objects from external CI systems. |
 | `pr.conflicted_files_count` | Integer                                     | The number files in the PR with conflicts                                                  |
 | `pr.conversations`          | [[`Conversation`]](#conversation-structure) | List of PR conversation objects, usually when reviewer have comments about the source code |
 | `pr.created_at`             | String                                      | The date and time the PR was created                                                       |
@@ -311,6 +367,29 @@ The source context include all code changes, it is not safe to share it with unk
   "created_at": String, # The time on which the comment was created
   "updated_at": String, # The time on which the comment was last updated
 }
+```
+
+#### `CommitStatus` structure :fontawesome-brands-github:
+
+Represents the status of external CI systems like Docker builds or test results. Note gitStream doesn't respond to commit status events, only collects them when other events trigger.
+
+```json
+{
+  "state": String, # The status of the check: `pending`, `success`, `failure`, `error`
+  "context": String, # The identifier for the CI system or check (e.g., "continuous-integration/jenkins")
+  "description": String # Human-readable description of the status (e.g., "The build succeeded!")
+}
+```
+
+Example:
+```json
+[
+  {
+    "state": "pending",
+    "context": "continuous-integration/jenkins",
+    "description": "The build succeeded!"
+  }
+]
 ```
 
 #### `Conversation` structure

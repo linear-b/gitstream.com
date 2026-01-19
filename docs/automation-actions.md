@@ -34,7 +34,7 @@ For all other actions, gitStream executes the actions in the order they are list
 - [`explain-code-experts`](#explain-code-experts) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 - [`merge`](#merge) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 - [`request-changes`](#request-changes) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
-- [`require-reviewers`](#require-reviewers) :fontawesome-brands-github: :fontawesome-brands-bitbucket:
+- [`require-reviewers`](#require-reviewers) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 - [`run-github-workflow`](#run-github-workflow) :fontawesome-brands-github:
 - [`send-http-request`](#send-http-request) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 - [`send-slack-message`](#send-slack-message) :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
@@ -48,7 +48,7 @@ For all other actions, gitStream executes the actions in the order they are list
 
 #### Dynamic actions arguments
 
-Arguments values a dynamic value is supported using expressions based on Jinja2 syntax, and includes gitStream context variables, for example:
+Argument values support dynamic values using expressions based on Jinja2 syntax, and include gitStream context variables, for example:
 
 ```yaml+jinja
 automations:
@@ -75,7 +75,7 @@ This is a managed action, when PR updates, the existing comments added by gitStr
 | Args       | Usage | Type      | Description                         |
 | -----------|------|-----|------------------------------------------------ |
 | `comment`  | Required | String    | Sets the comment, markdown is supported, including suggestion syntax (```suggestion … ```) |
-| `file_path`  | Required | String    | The relative path to the file that necessitates the comment |
+| `file_name`  | Required | String    | The relative path to the file that necessitates the comment |
 | `start_line`  | Optional | Integer    | The line (or the first line in multi-line comment)of the blob in the pull request diff that the comment applies to. If start_line is empty, the code comment should be on the file provided |
 | `end_line`  | Optional | Integer    | For a multi-line comment, the last line of the range that your comment applies to. Must be equal to or larger than start_line |
 
@@ -89,7 +89,7 @@ automations:
     run:
       - action: add-code-comment@v1
         args:
-          file_path: <FILE>
+          file_name: <FILE>
           start_line: 20
           comment: |
             Magic! Move it to a constant variable.
@@ -263,7 +263,7 @@ automations:
 
 #### `close` :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 
-This action, once triggered, close the PR without merging.
+This action, once triggered, closes the PR without merging.
 
 ```yaml+jinja title="example"
 automations:
@@ -289,16 +289,57 @@ This action, once triggered, reviews the code in the PR, and generates a comment
 | -----------|------|-----|------------------------------------------------ |
 | `approve_on_LGTM` | Optional | Bool    | Approve this PR if no issues were found. Default is `false` |
 | `guidelines` | Optional | String | Provides custom instructions to the AI model to tailor the code review. Can be inline text or loaded from a file using the `readFile()` function.                                           |
+| `issues_limit` | Optional | Integer \| `unlimited` | Limits the number of issues included in the generated code review comment. Set to a positive integer (e.g., `10`) or `unlimited` to include all issues. Default is `3`. |
+
+</div>
+
+This action returns outputs that can be used by subsequent automations through the `actions` context variable. Outputs available:
+
+<div class="filter-details" markdown=1>
+
+| Output    | Type | Description                                     |
+| ----------|------|------------------------------------------------ |
+| `is_LGTM` | Bool | `true` if the code review found no issues (looks good to me), `false` if issues were found |
+
+</div>
+
+See [`actions`](./context-variables.md#actions) for how to use the `actions` context variable to access outputs from this action in subsequent automations.
+
+**Examples**
+
+This example demonstrates using the `is_LGTM` output to automatically approve PRs that pass the AI code review:
+
+```yaml+jinja title="example - auto-approve based on code review output"
+automations:
+  # First automation: Run AI code review
+  ai_code_review:
+    if:
+      - true
+    run:
+      - action: code-review@v1
+
+  # Second automation: Only runs if the AI review found no issues
+  auto_approve_on_ai_lgtm:
+    if:
+      - {{ actions.ai_code_review.outputs.is_LGTM }}
+    run:
+      - action: approve@v1
+```
+
+!!! note "Automation Names with Hyphens"
+    
+    If your automation name contains hyphens (e.g., `ai-code-review`), you must use bracket notation to access its outputs:
+    
+    `{{ actions['ai-code-review'].outputs.is_LGTM }}  # use bracket notation`
+
+This example shows how to use guidelines for AI review.
 
 ```yaml+jinja title="example - inline guidelines"
 automations:
   linearb_ai_review:
-    on:
-      - pr_created
-      - commit
     if:
       - {{ not pr.draft }}
-      - {{ pr.author | match(list=['github-actions', '_bot_', 'dependabot', '[bot]']) | nope }}
+      - {{ not (is.bot_author or is.bot_branch) }}
     run:
       - action: code-review@v1
         args:
@@ -313,82 +354,109 @@ guidelines: |
     - In Javascript
         - Make sure camelCase is used for variable names
         - Make sure PascalCase is used for class names
+is:
+  bot_author: {{ pr.author | match(list=['github-actions', '_bot_', '[bot]', 'dependabot']) | some }}
+  bot_branch: {{ branch.name | match(list=['renovate/']) | some }}
+
 ```
+
+This example shows how to load guidelines from an external file and use them for the AI Review.
 
 ```yaml+jinja title="example - guidelines from file"
 automations:
   linearb_ai_review:
-    on:
-      - pr_created
-      - commit
     if:
       - {{ not pr.draft }}
-      - {{ pr.author | match(list=['github-actions', '_bot_', 'dependabot', '[bot]']) | nope }}
+      - {{ not (is.bot_author or is.bot_branch) }}
     run:
       - action: code-review@v1
         args:
           approve_on_LGTM: false
           guidelines: {{ "./REVIEW_RULES.md" | readFile() | dump }}
+
+is:
+  bot_author: {{ pr.author | match(list=['github-actions', '_bot_', '[bot]', 'dependabot']) | some }}
+  bot_branch: {{ branch.name | match(list=['renovate/']) | some }}
 ```
 
-!!! tip "Loading Guidelines from Files"
+This example shows how to combine organization-level and repository-level guidelines.
 
-    **Repository Root Files**: Place your guidelines file (e.g., `REVIEW_RULES.md`) at the root of your repository and reference it with:
-    ```yaml
-    guidelines: {{ "./REVIEW_RULES.md" | readFile() | dump }}
-    ```
+```yaml+jinja title="example - combined org + repo guidelines"
+automations:
+  linearb_ai_review:
+    if:
+      - true
+    run:
+      - action: code-review@v1
+        args:
+          guidelines: |
+            Repo {{ "./repo_guidelines.md" | readFile() }}
+            Org: {{ "../cm/org_guidelines.md" | readFile() }}
+```
 
-    **CM Repository Files**: If you have organization-wide guidelines in your central CM repository, reference them with:
-    ```yaml
-    guidelines: {{ "../cm/REVIEW_RULES.md" | readFile() | dump }}
-    ```
+!!! tip "Iterative Guidelines Refinement with Playground"
 
-    **Team-specific Files**: For team-level guidelines, place the file in the specific team repository root and use the relative path:
-    ```yaml
-    guidelines: {{ "./TEAM_REVIEW_RULES.md" | readFile() | dump }}
-    ```
+    To achieve the exact review behavior you want, use this iterative workflow:
 
-    The `dump` filter ensures proper YAML formatting when the file content is inserted into the configuration.
+    1. Start with the [Playground](https://app.gitstream.cm/playground)
+    2. Add specific guidelines e.g., "Do not comment on formatting issues"
+    3. Run in the Playground with a reference PR from your repository
+    4. Refine guidelines based on the results
+    5. Repeat cycles 2-4 until you get the expected review behavior
+    6. Deploy to your repository CM rules - The guidelines will now work consistently on real PRs
 
-The following files are automatically excluded from the code review.
 
-| File type | Filter type | Values|
-| - | - | - |
-| Data | Extension | `ini` `csv` `xls` `xlsx` `xlr` `doc` `docx` `txt` `pps` `ppt` `pptx` `dot` `dotx` `log` `tar` `rtf` `dat` `ipynb` `po` `profile` `object` `obj` `dxf` `twb` `bcsymbolmap` `tfstate` `pdf` `rbi` `pem` `crt` `svg` `png` `jpeg` `jpg` `ttf` `app` `bin` `bmp` `bz2` `class` `db` `dll` `dylib` `egg` `eot` `exe` `gif` `gitignore` `glif` `gradle` `gz` `ico` `jar` `lo` `lock` `mp3` `mp4` `nar` `o` `ogg` `otf` `p` `pickle` `pkl` `pyc` `pyd` `pyo` `rkt` `so` `ss` `tgz` `tsv` `war` `webm` `woff` `woff2` `xz` `zip` `zst` `snap` `lockb` |
-| Lock | Regex | `.*(yarn\|gemfile\|podfile\|cargo\|composer\|pipfile\|gopkg)\.lock$` `.*gradle\.lockfile$` `.*lock\.sbt$` |
-| Build | Regex | `.*dist/.*\\.js` `.*build/.*\\.js` |
-| Data | Regex | `.*public/assets/.*\\.js` |
+**Loading Guidelines from Files**
 
-| Lock File Name          | Programming Language | Package Manager      |
-|-------------------------|----------------------|----------------------|
-| `package-lock.json`     | JavaScript           | npm                  |
-| `yarn.lock`             | JavaScript           | Yarn                 |
-| `npm-shrinkwrap.json`   | JavaScript           | npm                  |
-| `Pipfile.lock`          | Python               | pipenv               |
-| `poetry.lock`           | Python               | Poetry               |
-| `conda-lock.yml`        | Python               | conda                |
-| `Gemfile.lock`          | Ruby                 | Bundler              |
-| `composer.lock`         | PHP                  | Composer             |
-| `packages.lock.json`    | .NET                 | NuGet                |
-| `project.assets.json`   | .NET                 | .NET Core            |
-| `pom.xml`               | Java                 | Maven                |
-| `Cargo.lock`            | Rust                 | Cargo                |
-| `mix.lock`              | Elixir               | Mix                  |
-| `pubspec.lock`          | Dart/Flutter         | pub                  |
-| `go.sum`                | Go                   | Go modules           |
-| `stack.yaml.lock`       | Haskell              | Stack                |
-| `vcpkg.json`            | C++                  | vcpkg                |
-| `conan.lock`            | C++                  | Conan                |
-| `ivy.xml`               | Scala                | sbt/Ivy              |
-| `project.clj`           | Clojure              | Leiningen            |
-| `Podfile.lock`          | Swift/Objective-C    | CocoaPods            |
-| `Cartfile.resolved`     | Swift/Objective-C    | Carthage             |
-| `flake.lock`            | Nix                  | Nix                  |
-| `pnpm-lock.yaml`        | JavaScript           | pnpm                 |
+| Location | Description | File Placement | Configuration |
+|----------|-------------|----------------|---------------|
+| Repository Root Files | Guidelines file in your repository root | Place your guidelines file (e.g., `REVIEW_RULES.md`) at the root of your repository | `guidelines: {{ "./REVIEW_RULES.md" | readFile() | dump }}` |
+| CM Repository Files | Organization-wide guidelines in central CM repository | Place guidelines in your central CM repository | `guidelines: {{ "../cm/REVIEW_RULES.md" | readFile() | dump }}` |
+
+The `dump` filter ensures proper YAML formatting when the file content is inserted into the configuration.
+
+??? "Files Excluded from AI Review"
+
+    The following files are automatically excluded from the code review.
+
+    | File type | Filter type | Values|
+    | - | - | - |
+    | Data | Extension | `ini` `csv` `xls` `xlsx` `xlr` `doc` `docx` `txt` `pps` `ppt` `pptx` `dot` `dotx` `log` `tar` `rtf` `dat` `ipynb` `po` `profile` `object` `obj` `dxf` `twb` `bcsymbolmap` `tfstate` `pdf` `rbi` `pem` `crt` `svg` `png` `jpeg` `jpg` `ttf` `app` `bin` `bmp` `bz2` `class` `db` `dll` `dylib` `egg` `eot` `exe` `gif` `gitignore` `glif` `gradle` `gz` `ico` `jar` `lo` `lock` `mp3` `mp4` `nar` `o` `ogg` `otf` `p` `pickle` `pkl` `pyc` `pyd` `pyo` `rkt` `so` `ss` `tgz` `tsv` `war` `webm` `woff` `woff2` `xz` `zip` `zst` `snap` `lockb` |
+    | Lock | Regex | `.*(yarn\|gemfile\|podfile\|cargo\|composer\|pipfile\|gopkg)\.lock$` `.*gradle\.lockfile$` `.*lock\.sbt$` |
+    | Build | Regex | `.*dist/.*\\.js` `.*build/.*\\.js` |
+    | Data | Regex | `.*public/assets/.*\\.js` |
+
+    | Lock File Name          | Programming Language | Package Manager      |
+    |-------------------------|----------------------|----------------------|
+    | `package-lock.json`     | JavaScript           | npm                  |
+    | `yarn.lock`             | JavaScript           | Yarn                 |
+    | `npm-shrinkwrap.json`   | JavaScript           | npm                  |
+    | `Pipfile.lock`          | Python               | pipenv               |
+    | `poetry.lock`           | Python               | Poetry               |
+    | `conda-lock.yml`        | Python               | conda                |
+    | `Gemfile.lock`          | Ruby                 | Bundler              |
+    | `composer.lock`         | PHP                  | Composer             |
+    | `packages.lock.json`    | .NET                 | NuGet                |
+    | `project.assets.json`   | .NET                 | .NET Core            |
+    | `pom.xml`               | Java                 | Maven                |
+    | `Cargo.lock`            | Rust                 | Cargo                |
+    | `mix.lock`              | Elixir               | Mix                  |
+    | `pubspec.lock`          | Dart/Flutter         | pub                  |
+    | `go.sum`                | Go                   | Go modules           |
+    | `stack.yaml.lock`       | Haskell              | Stack                |
+    | `vcpkg.json`            | C++                  | vcpkg                |
+    | `conan.lock`            | C++                  | Conan                |
+    | `ivy.xml`               | Scala                | sbt/Ivy              |
+    | `project.clj`           | Clojure              | Leiningen            |
+    | `Podfile.lock`          | Swift/Objective-C    | CocoaPods            |
+    | `Cartfile.resolved`     | Swift/Objective-C    | Carthage             |
+    | `flake.lock`            | Nix                  | Nix                  |
+    | `pnpm-lock.yaml`        | JavaScript           | pnpm                 |
 
 !!! tip
 
     You can also filter more files, using [`config.ignore_files`](/cm-file/#configignore_files).
+
 
 #### `describe-changes` :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 
@@ -414,14 +482,10 @@ manifest:
 
 automations:
   linearb_ai_description:
-    # trigger it only when PR is created or has new commits
-    on:
-      - pr_created
-      - commit
     # skip description for Draft PRs and PRs from bots
     if:
       - {{ not pr.draft }}
-      - {{ pr.author | match(list=['github-actions', '_bot_', 'dependabot', '[bot]']) | nope }}
+      - {{ not (is.bot_author or is.bot_branch) }}
     run:
       - action: describe-changes@v1
         args:
@@ -436,6 +500,10 @@ guidelines: |
 
 # Load the PR template content from a file in the repository
 TEMPLATE: {{ ".github/PULL_REQUEST_TEMPLATE.md" | readFile() | dump }}
+
+is:
+  bot_author: {{ pr.author | match(list=['github-actions', '_bot_', '[bot]', 'dependabot']) | some }}
+  bot_branch: {{ branch.name | match(list=['renovate/']) | some }}
 ```
 
 !!! tip "Excluded Files"
@@ -482,6 +550,10 @@ automations:
     ```
 
     For more information about the `codeExperts` filter function, see the [filter functions documentation](https://docs.gitstream.cm/filter-functions/#codeexperts).
+
+!!! tip "Limit git history for code experts"
+
+    Use the [`config.git_history_since`](./cm-file.md#configgit_history_since) configuration to limit the git history analysis to commits after a specific date. This is useful for team transitions or when you want to focus on recent contributors only.
 
 #### `merge` :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 
@@ -543,9 +615,9 @@ automations:
     :fontawesome-brands-gitlab: Enable the "All threads must be resolved" Merge check
 
 
-#### `require-reviewers` :fontawesome-brands-github: :fontawesome-brands-bitbucket:
+#### `require-reviewers` :fontawesome-brands-github: :fontawesome-brands-gitlab: :fontawesome-brands-bitbucket:
 
-This action, once triggered, requires a specific reviewer approval. The PR merge is blocked till approved by either of the listed users or teams.
+This action, once triggered, requires a specific reviewer approval. The PR/MR merge is blocked till approved by either of the listed users or teams.
 
 <div class="filter-details" markdown=1>
 
@@ -573,6 +645,8 @@ automations:
 
     :fontawesome-brands-github: Enable branch protection and set gitStream as a required check
 
+    :fontawesome-brands-gitlab: GitLab automatically blocks merge when this action is triggered
+
     :fontawesome-brands-bitbucket: Select "Prevent a merge with unresolved merge checks" under Branch restrictions
 
 #### `run-github-workflow` :fontawesome-brands-github:
@@ -594,11 +668,12 @@ This action, once triggered, will start a workflow dispatch automation with the 
 </div>
 
 ```yaml+jinja title="example"
-on:
-  - commit
+
 
 automations:
   run_workflow_dispatch:
+    on:
+      - commit
     if:
       - {{ has.fe_code_changes }}
     run:
