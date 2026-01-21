@@ -54,3 +54,9 @@ jobs:
       
     - name: Show value of 'has_new_commits'
       run: echo ${{ steps.sync.outputs.has_new_commits }}
+
+  # After syncing, run the deploy workflow to actually push the docs. 
+  # This is not auto-triggered by the push done in the above sync since we're running in a workflow 
+  call-pages-workflow:
+    uses: ./.github/workflows/deploy.yml
+    secrets: inherit
