@@ -3,6 +3,8 @@ on:
   push:
     branches:
       - main
+  workflow_call:
+    # no inputs needed
 
 jobs:
   build:
